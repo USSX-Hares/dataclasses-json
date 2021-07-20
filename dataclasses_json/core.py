@@ -11,6 +11,7 @@ from dataclasses import (MISSING,
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
+from functools import partial
 from typing import Any, Collection, Mapping, Union, get_type_hints, Tuple
 from uuid import UUID
 
@@ -123,6 +124,10 @@ def _encode_overrides(kvs, overrides, encode_json=False):
 
             encoder = overrides[original_key].encoder
             v = encoder(v) if encoder is not None else v
+
+            generic_encoder = overrides[original_key].generic_encoder
+            v = _encode_custom_generic(generic_encoder, v, encode_json=encode_json) \
+                if generic_encoder is not None else v
 
         if encode_json:
             v = _encode_json_type(v)
@@ -335,11 +340,26 @@ def _decode_items(type_arg, xs, infer_missing):
     return items
 
 
+def _encode_custom_generic(unbound_encoder, obj, **kwargs):
+    """
+    Encode custom generic registered either with `field(metadata=config(generic_encoder=...)))`
+    or with `global_config.generic_encoders[...]`.
+    
+    By default, tries to use member's own implementation of the method.
+    """
+    
+    try:
+        encoder = getattr(obj, unbound_encoder.__name__)
+    except AttributeError:
+        encoder = partial(unbound_encoder, obj)
+    return encoder(data_encoder=partial(_asdict, **kwargs), **kwargs)
+
 def _asdict(obj, encode_json=False):
     """
     A re-implementation of `asdict` (based on the original in the `dataclasses`
     source) to support arbitrary Collection and Mapping types.
     """
+    tp = _get_type_origin(type(obj))
     if _is_dataclass_instance(obj):
         result = []
         for field in fields(obj):
@@ -350,6 +370,8 @@ def _asdict(obj, encode_json=False):
                                                    usage="to")
         return _encode_overrides(dict(result), _user_overrides_or_exts(obj),
                                  encode_json=encode_json)
+    elif (tp in cfg.global_config.generic_encoders):
+        return _encode_custom_generic(cfg.global_config.generic_encoders[tp], obj, encode_json=encode_json)
     elif isinstance(obj, Mapping):
         return dict((_asdict(k, encode_json=encode_json),
                      _asdict(v, encode_json=encode_json)) for k, v in
