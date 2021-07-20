@@ -1,5 +1,5 @@
 import functools
-from typing import Callable, Dict, Optional, TypeVar, Union
+from typing import Callable, Dict, Optional, TypeVar, Union, Type
 
 from marshmallow.fields import Field as MarshmallowField
 
@@ -24,6 +24,9 @@ class _GlobalConfig:
         self.encoders: Dict[type, Callable] = {}
         self.decoders: Dict[type, Callable] = {}
         self.mm_fields: Dict[type, MarshmallowField] = {}
+        self.optional_factories: Dict[type, Callable] = {}
+        self.generic_encoders: Dict[type, Callable] = {}
+        self.generic_decoders: Dict[type, Callable] = {}
         # self._json_module = json
 
     # TODO: #180
@@ -46,6 +49,9 @@ def config(metadata: dict = None, *,
            # Specifically, a Callable[A, B], where `B` is bound as a JSON type
            encoder: Callable = None,
            decoder: Callable = None,
+           optional_factory: Callable = None,
+           generic_encoder: Callable = None,
+           generic_decoder: Callable = None,
            mm_field: MarshmallowField = None,
            letter_case: Callable[[str], str] = None,
            undefined: Optional[Union[str, Undefined]] = None,
@@ -65,6 +71,15 @@ def config(metadata: dict = None, *,
 
     if mm_field is not None:
         lib_metadata['mm_field'] = mm_field
+
+    if optional_factory is not None:
+        lib_metadata['optional_factory'] = optional_factory
+
+    if generic_encoder is not None:
+        lib_metadata['generic_encoder'] = generic_encoder
+
+    if generic_decoder is not None:
+        lib_metadata['generic_decoder'] = generic_decoder
 
     if field_name is not None:
         if letter_case is not None:

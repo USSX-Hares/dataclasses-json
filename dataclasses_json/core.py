@@ -25,7 +25,7 @@ from dataclasses_json.utils import (_get_type_cons, _get_type_origin,
 
 Json = Union[dict, list, str, int, float, bool, None]
 
-confs = ['encoder', 'decoder', 'mm_field', 'letter_case', 'exclude']
+confs = ['encoder', 'decoder', 'mm_field', 'letter_case', 'exclude', 'optional_factory', 'generic_encoder', 'generic_decoder']
 FieldOverride = namedtuple('FieldOverride', confs)
 
 
@@ -54,6 +54,9 @@ def _user_overrides_or_exts(cls):
     global_metadata = defaultdict(dict)
     encoders = cfg.global_config.encoders
     decoders = cfg.global_config.decoders
+    optional_factories = cfg.global_config.optional_factories
+    generic_encoders = cfg.global_config.generic_encoders
+    generic_decoders = cfg.global_config.generic_decoders
     mm_fields = cfg.global_config.mm_fields
     for field in fields(cls):
         if field.type in encoders:
@@ -61,7 +64,13 @@ def _user_overrides_or_exts(cls):
         if field.type in decoders:
             global_metadata[field.name]['decoder'] = decoders[field.type]
         if field.type in mm_fields:
-            global_metadata[field.name]['mm_fields'] = mm_fields[field.type]
+            global_metadata[field.name]['mm_field'] = mm_fields[field.type]
+        if field.type in optional_factories:
+            global_metadata[field.name]['optional_factory'] = optional_factories[field.type]
+        if field.type in generic_encoders:
+            global_metadata[field.name]['generic_encoder'] = generic_encoders[field.type]
+        if field.type in generic_decoders:
+            global_metadata[field.name]['generic_decoder'] = generic_decoders[field.type]
     try:
         cls_config = (cls.dataclass_json_config
                       if cls.dataclass_json_config is not None else {})
@@ -79,6 +88,12 @@ def _user_overrides_or_exts(cls):
             field_config['decoder'] = field_metadata['decoder']
         if 'mm_field' in field_metadata:
             field_config['mm_field'] = field_metadata['mm_field']
+        if 'optional_factory' in field_metadata:
+            field_config['optional_factory'] = field_metadata['optional_factory']
+        if 'generic_encoder' in field_metadata:
+            field_config['generic_encoder'] = field_metadata['generic_encoder']
+        if 'generic_decoder' in field_metadata:
+            field_config['generic_decoder'] = field_metadata['generic_decoder']
         # then apply class-level overrides or extensions
         field_config.update(cls_config)
         # last apply field-level overrides or extensions
