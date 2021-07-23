@@ -22,7 +22,7 @@ from dataclasses_json.utils import (_get_type_cons, _get_type_origin,
                                     _handle_undefined_parameters_safe,
                                     _is_collection, _is_mapping, _is_new_type,
                                     _is_optional, _isinstance_safe,
-                                    _issubclass_safe)
+                                    _issubclass_safe, _is_supported_custom_generic, _is_supported_optional_factory)
 
 Json = Union[dict, list, str, int, float, bool, None]
 
@@ -243,6 +243,8 @@ def _support_extended_types(field_type, field_value):
         res = (field_value
                if isinstance(field_value, UUID)
                else UUID(field_value))
+    elif (_is_supported_optional_factory(field_type)):
+        res = _decode_optional(field_type, field_value)
     else:
         res = field_value
     return res
@@ -251,13 +253,27 @@ def _support_extended_types(field_type, field_value):
 def _is_supported_generic(type_):
     not_str = not _issubclass_safe(type_, str)
     is_enum = _issubclass_safe(type_, Enum)
+    is_custom_generic = _is_supported_custom_generic(type_)
     return (not_str and _is_collection(type_)) or _is_optional(
-        type_) or is_union_type(type_) or is_enum
+        type_) or is_union_type(type_) or is_enum or is_custom_generic
 
+def _decode_optional(type_, value):
+    tp = _get_type_origin(type_)
+    return tp(value) if (value is not None) else cfg.global_config.optional_factories[tp]()
+
+def _decode_custom_generic(type_, value, **kwargs):
+    tp = _get_type_origin(type_)
+    decoder = cfg.global_config.generic_decoders[tp]
+    return decoder(tp, value, *type_.__args__, data_decoder=partial(_decode_field, **kwargs), **kwargs)
 
 def _decode_generic(type_, value, infer_missing):
     if value is None:
-        res = value
+        if (_is_supported_optional_factory(type_)):
+            res = _decode_optional(type_, value)
+        else:
+            res = value
+    elif (_is_supported_custom_generic(type_)):
+        res = _decode_custom_generic(type_, value, infer_missing=infer_missing)
     elif _issubclass_safe(type_, Enum):
         # Convert to an Enum using the type as a constructor.
         # Assumes a direct match is found.

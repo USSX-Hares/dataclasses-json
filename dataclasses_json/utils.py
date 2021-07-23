@@ -1,8 +1,9 @@
 import inspect
 import sys
 from datetime import datetime, timezone
-from typing import Collection, Mapping, Optional, TypeVar, Any
+from typing import Collection, Mapping, Optional, Any
 
+from dataclasses_json import cfg
 
 def _get_type_cons(type_):
     """More spaghetti logic for 3.6 vs. 3.7"""
@@ -90,8 +91,14 @@ def _is_new_type(type_):
 def _is_optional(type_):
     return (_issubclass_safe(type_, Optional) or
             _hasargs(type_, type(None)) or
+            _is_supported_optional_factory(type_) or
             type_ is Any)
 
+def _is_supported_optional_factory(type_):
+    return _get_type_origin(type_) in cfg.global_config.optional_factories
+
+def _is_supported_custom_generic(type_):
+    return _get_type_origin(type_) in cfg.global_config.generic_decoders
 
 def _is_mapping(type_):
     return _issubclass_safe(_get_type_origin(type_), Mapping)
@@ -149,8 +156,3 @@ def _handle_undefined_parameters_safe(cls, kvs, usage: str):
         raise ValueError(
             f"usage must be one of ['to', 'from', 'dump', 'init'], "
             f"but is '{usage}'")
-
-
-# Define a type for the CatchAll field
-# https://stackoverflow.com/questions/59360567/define-a-custom-type-that-behaves-like-typing-any
-CatchAllVar = TypeVar("CatchAllVar", bound=Mapping)

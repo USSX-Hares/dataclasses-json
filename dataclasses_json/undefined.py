@@ -3,12 +3,15 @@ import dataclasses
 import functools
 import inspect
 from dataclasses import Field, fields
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, TypeVar, Mapping
 from enum import Enum
 
 from marshmallow import ValidationError
 
-from dataclasses_json.utils import CatchAllVar
+
+# Define a type for the CatchAll field
+# https://stackoverflow.com/questions/59360567/define-a-custom-type-that-behaves-like-typing-any
+CatchAllVar = TypeVar("CatchAllVar", bound=Mapping)
 
 KnownParameters = Dict[str, Any]
 UnknownParameters = Dict[str, Any]

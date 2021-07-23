@@ -22,9 +22,8 @@ from dataclasses_json.core import (_is_supported_generic, _decode_dataclass,
 from dataclasses_json.utils import (_is_collection, _is_optional,
                                     _issubclass_safe, _timestamp_to_dt_aware,
                                     _is_new_type, _get_type_origin,
-                                    _handle_undefined_parameters_safe,
-                                    CatchAllVar)
-
+                                    _handle_undefined_parameters_safe)
+from dataclasses_json.undefined import CatchAllVar
 
 class _TimestampField(fields.Field):
     def _serialize(self, value, attr, obj, **kwargs):
