@@ -123,6 +123,7 @@ TYPES = {
     typing.Any: fields.Raw,
     dict: fields.Dict,
     list: fields.List,
+    tuple: fields.Tuple,
     str: fields.Str,
     int: fields.Int,
     float: fields.Float,
@@ -340,6 +341,7 @@ def build_schema(cls: typing.Type[A],
         return Schema.dumps(self, *args, **kwargs)
 
     def dump(self, obj, *, many=None):
+        many = self.many if many is None else bool(many)
         dumped = Schema.dump(self, obj, many=many)
         # TODO This is hacky, but the other option I can think of is to generate a different schema
         #  depending on dump and load, which is even more hacky
