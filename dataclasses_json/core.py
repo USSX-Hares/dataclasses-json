@@ -148,7 +148,7 @@ def _decode_letter_case_overrides(field_names, overrides):
 
 
 def _decode_dataclass(cls, kvs, infer_missing):
-    if isinstance(kvs, cls):
+    if _isinstance_safe(kvs, cls):
         return kvs
     overrides = _user_overrides_or_exts(cls)
     kvs = {} if kvs is None and infer_missing else kvs
@@ -378,8 +378,15 @@ def _asdict(obj, encode_json=False):
     tp = _get_type_origin(type(obj))
     if _is_dataclass_instance(obj):
         result = []
+        overrides = _user_overrides_or_exts(obj)
         for field in fields(obj):
-            value = _asdict(getattr(obj, field.name), encode_json=encode_json)
+            if overrides[field.name].encoder:
+                value = getattr(obj, field.name)
+            else:
+                value = _asdict(
+                    getattr(obj, field.name),
+                    encode_json=encode_json
+                )
             result.append((field.name, value))
 
         result = _handle_undefined_parameters_safe(cls=obj, kvs=dict(result),
