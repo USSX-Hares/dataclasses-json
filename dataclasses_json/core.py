@@ -56,8 +56,6 @@ def _user_overrides_or_exts(cls):
     encoders = cfg.global_config.encoders
     decoders = cfg.global_config.decoders
     optional_factories = cfg.global_config.optional_factories
-    generic_encoders = cfg.global_config.generic_encoders
-    generic_decoders = cfg.global_config.generic_decoders
     mm_fields = cfg.global_config.mm_fields
     for field in fields(cls):
         if field.type in encoders:
@@ -68,10 +66,8 @@ def _user_overrides_or_exts(cls):
             global_metadata[field.name]['mm_field'] = mm_fields[field.type]
         if field.type in optional_factories:
             global_metadata[field.name]['optional_factory'] = optional_factories[field.type]
-        if field.type in generic_encoders:
-            global_metadata[field.name]['generic_encoder'] = generic_encoders[field.type]
-        if field.type in generic_decoders:
-            global_metadata[field.name]['generic_decoder'] = generic_decoders[field.type]
+        global_metadata[field.name]['generic_encoder'] = None
+        global_metadata[field.name]['generic_decoder'] = None
     try:
         cls_config = (cls.dataclass_json_config
                       if cls.dataclass_json_config is not None else {})
@@ -288,7 +284,7 @@ def _decode_generic(type_, value, infer_missing):
             vs = _decode_items(v_type, value.values(), infer_missing)
             xs = zip(ks, vs)
         else:
-            xs = _decode_items(type_.__args__[0], value, infer_missing)
+            xs = _decode_items(getattr(type_, "__args__", (Any, )), value, infer_missing)
 
         # get the constructor if using corresponding generic type in `typing`
         # otherwise fallback on constructing using type_ itself

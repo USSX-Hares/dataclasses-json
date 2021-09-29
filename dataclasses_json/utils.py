@@ -103,7 +103,7 @@ def _is_supported_optional_factory(type_):
     return _get_type_origin(type_) in cfg.global_config.optional_factories
 
 def _is_supported_custom_generic(type_):
-    return _get_type_origin(type_) in cfg.global_config.generic_decoders
+    return hasattr(type_, "__args__") and _get_type_origin(type_) in cfg.global_config.generic_decoders
 
 def _is_mapping(type_):
     return _issubclass_safe(_get_type_origin(type_), Mapping)
