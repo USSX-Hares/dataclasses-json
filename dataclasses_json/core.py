@@ -408,3 +408,6 @@ def _asdict(obj, encode_json=False):
 def _register_generic_cls(cls, encoder, decoder):
     cfg.global_config.generic_encoders[cls] = encoder
     cfg.global_config.generic_decoders[cls] = decoder
+
+def _register_optional_cls(cls, optional_factory):
+    cfg.global_config.optional_factories[cls] = optional_factory

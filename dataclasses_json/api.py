@@ -9,7 +9,8 @@ from dataclasses_json.stringcase import (camelcase, pascalcase, snakecase,
                                          spinalcase)  # type: ignore
 from dataclasses_json.cfg import config
 from dataclasses_json.core import (Json, _ExtendedEncoder, _asdict,
-                                   _decode_dataclass, _register_generic_cls)
+                                   _decode_dataclass,
+                                   _register_generic_cls, _register_optional_cls)
 from dataclasses_json.mm import (JsonData, SchemaType, build_schema)
 from dataclasses_json.undefined import Undefined
 from dataclasses_json.utils import (_handle_undefined_parameters_safe,
@@ -201,6 +202,16 @@ class DecodableGenericABC(abc.ABC):
         return cls.__decode__(data, *types, **kwargs)
 
     __class_getitem__ = classmethod(GenericAlias)
+
+class OptionalABC(abc.ABC):
+    def __init_subclass__(cls, **kwargs):
+        super(OptionalABC, cls).__init_subclass__(**kwargs)
+        _register_optional_cls(cls, cls.__empty__)
+    
+    @classmethod
+    @abc.abstractmethod
+    def __empty__(cls):
+        raise NotImplementedError
 
 
 def dataclass_json(_cls=None, *, letter_case=None,
