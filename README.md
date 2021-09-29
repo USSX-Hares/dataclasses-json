@@ -467,6 +467,8 @@ print(C.from_json('''{"a": null, "b": null}'''))
 
 
 ### Encode/decode my own generic classes?
+*This might not work on Python 3.6 properly.*
+
 Your generic classes should inherit the `DecodableGenericABC` class and
 have `__encode__` and `__decode__` methods implemented.
 
