@@ -432,6 +432,264 @@ from __future__ import annotations
 ```
 as it will cause problems with the way dataclasses_json accesses the type annotations.
 
+### Decode classes from None?
+Your generic classes should inherit the `OptionalABC` class and
+have `__empty__` class method implemented.
+
+An example:
+```
+from dataclasses import dataclass
+from dataclasses_json import DataClassJsonMixin, OptionalABC
+
+class A:
+    def __init__(self, data):
+        self.is_empty = data is None
+        self.data = data
+    def __repr__(self):
+        return f'{type(self).__name__}(is_empty={self.is_empty}, data={self.data!r})'
+
+class B(A, OptionalABC):
+    @classmethod
+    def __empty__(cls):
+        return cls(None)
+
+@dataclass
+class C(DataClassJsonMixin):
+    a: A
+    b: B
+
+print(C.from_json('''{"a": 1, "b": 2}'''))
+# C(a=1, b=2)
+
+print(C.from_json('''{"a": null, "b": null}'''))
+# C(a=None, b=B(is_empty=True, data=None))
+```
+
+
+### Encode/decode my own generic classes?
+Your generic classes should inherit the `DecodableGenericABC` class and
+have `__encode__` and `__decode__` methods implemented.
+
+A shorter example (for primitive cases):
+```
+from typing import Generic, TypeVar, List
+from dataclasses import dataclass
+from dataclasses_json import DataClassJsonMixin, DecodableGenericABC
+
+T = TypeVar('T')
+class MyGeneric(Generic[T], DecodableGenericABC):
+    _data: List[T]
+    def __init__(self, data: List[T]):
+        self._data = data
+    def __repr__(self):
+        return f'MyGeneric(data={self._data!r})'
+    def __encode__(self, **kwargs):
+        return self._data
+    @classmethod
+    def __decode__(cls, data, *types, **kwargs):
+        return cls(data)
+
+@dataclass
+class MyContainer(DataClassJsonMixin):
+    int_list: MyGeneric[int]
+    str_list: MyGeneric[str]
+
+a = MyGeneric([1, 2, 3])
+b = MyGeneric(['a', 'b'])
+
+c = MyContainer(a, b)
+print(c.to_json())
+# {"int_list": [1, 2, 3], "str_list": ["a", "b"]}
+
+d = MyContainer.from_json('''{"int_list": [1, 2, 3], "str_list": ["a", "b"]}''')
+print(d)
+# MyContainer(int_list=MyGeneric(data=[1, 2, 3]), str_list=MyGeneric(data=['a', 'b']))
+```
+An example above does not utilize the `data_encoder` / `data_decoder`
+keyword-onnly parameters for the `__encode__` / `__decode__` methods,
+and the decoder does not take respect of the `*types` argument.
+This works for the primitive classes like `int` or `str`,
+but would fail for any classes those require encoding/decoding.
+
+A larger example (for real cases):
+```python
+from dataclasses import dataclass
+from typing import *
+from uuid import uuid4
+
+from dataclasses_json import DataClassJsonMixin, DecodableGenericABC, OptionalABC
+from dataclasses_json.core import Json
+
+T = TypeVar('T')
+K = TypeVar('K')
+
+_MISSING = object()
+class CustomMapping(Mapping[K, T], Container[K], Generic[K, T], DecodableGenericABC, num_args=2):
+    __slots__ = ('_data', '_id')
+    
+    _data: Dict[K, T]
+    _id: str
+    
+    def __init__(self, data: Dict[K, T], *, id: str = None):
+        self._data = dict(data)
+        self._id = id or str(uuid4())
+    
+    def __getitem__(self, item: K) -> T:
+        return self._data[item]
+    
+    def __len__(self) -> int:
+        return len(self._data)
+    
+    def __iter__(self) -> Iterator[K]:
+        return iter(self._data.keys())
+    
+    def __bool__(self) -> bool:
+        return bool(self._data)
+    
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(id={self._id!r}, data={self._data!r})'
+    
+    def __eq__(self, other):
+        if (not isinstance(other, type(self))):
+            raise NotImplementedError
+        
+        return self._id == other._id and self._data == other._data
+    
+    def __hash__(self):
+        return hash(self._id) + hash(self._data)
+    
+    @property
+    def id(self) -> str:
+        return self._id
+    
+    def __encode__(self, *, data_encoder: Callable[[T], Json], **kwargs) -> Json:
+        data_encoded = data_encoder(self._data)
+        id_encoded = data_encoder(self._id)
+        return dict(id=id_encoded, data=data_encoded)
+    
+    @classmethod
+    def __decode__(cls, data: Json, *types, data_decoder: Callable[[Type[T], Json], T], **kwargs) -> 'CustomMapping[K, T]':
+        if (not isinstance(data, Mapping)):
+            raise TypeError(f"'data' is expected to be Mapping, got {type(data)}")
+        
+        k_type, v_type = types
+        data = dict(data)
+        _data = data_decoder(v_type, data.pop('data'))
+        _id = data.pop('id', _MISSING)
+        if (_id is not _MISSING):
+            _id = data_decoder(str, _id)
+        else:
+            _id = None
+        
+        if (data):
+            raise ValueError(f"Got unexpected fields while decoding CustomMapping: {list(data.keys())}")
+        
+        return cls(data=_data, id=_id)
+
+class OptionContainer(Collection[T], Generic[T], DecodableGenericABC, OptionalABC):
+    __slots__ = ('_is_empty', '_data')
+    
+    _is_empty: bool
+    _data: T
+    
+    def __init__(self, data: Optional[T]):
+        self._data = data
+        self._is_empty = data is None
+    
+    @classmethod
+    def __non_empty__(cls, data: T) -> 'OptionContainer[T]':
+        r = cls(data)
+        r._is_empty = False
+        return r
+    
+    @classmethod
+    def __empty__(cls) -> 'OptionContainer[T]':
+        r = cls(None)
+        r._is_empty = True
+        return r
+    
+    def __contains__(self, item: T) -> bool:
+        return not self._is_empty and item == self._data
+    
+    def __iter__(self) -> Iterator[T]:
+        if (not self._is_empty):
+            yield self._data
+    
+    def __len__(self) -> int:
+        return int(self._is_empty)
+    
+    def __bool__(self) -> bool:
+        return self._is_empty
+    
+    def __repr__(self) -> str:
+        if (self._is_empty):
+            return f'{self.__class__.__name__}<empty>'
+        else:
+            return f'{self.__class__.__name__}({self._data!r})'
+    
+    def __eq__(self, other):
+        if (not isinstance(other, type(self))):
+            raise NotImplementedError
+        
+        if (self._is_empty):
+            return other._is_empty
+        elif (not other._is_empty):
+            return self._data == other._data
+        else:
+            return False
+    
+    def __hash__(self):
+        if (self._is_empty):
+            return _EMPTY_HASH__OC
+        else:
+            return hash(self._data)
+    
+    def __encode__(self, *, data_encoder: Callable[[T], Json], **kwargs) -> Json:
+        if (self._is_empty):
+            return None
+        else:
+            return data_encoder(self._data)
+    
+    @classmethod
+    def __decode__(cls, data: Json, *types: Type[T], data_decoder: Callable[[Type[T], Json], T], **kwargs) -> 'OptionContainer[T]':
+        if (data is None):
+            return OptionContainer.__empty__()
+        else:
+            return OptionContainer.__non_empty__(data_decoder(*types, data))
+    
+    init_empty = __empty__
+    init_non_empty = __non_empty__
+
+_EMPTY_HASH__OC = hash(None) + hash(OptionContainer)
+
+@dataclass
+class MyClass(DataClassJsonMixin):
+    opt_int: OptionContainer[int]
+    opt_str: OptionContainer[str]
+    opt_mapping: OptionContainer[CustomMapping[str, int]]
+```
+
+Test it:
+```
+opt_a = OptionContainer.init_non_empty(124)
+opt_b = OptionContainer.init_empty()
+opt_c = OptionContainer(CustomMapping(dict(f1=1, f2=2), id='135121-231566677'))
+
+my_cls = MyClass(opt_a, opt_b, opt_c)
+print(my_cls)
+
+actual_json = my_cls.to_json()
+print(actual_json)
+# {"opt_int": 124, "opt_str": null, "opt_mapping": {"id": "135121-231566677", "data": {"f1": 1, "f2": 2}}}
+
+wanted_json = '''{"opt_int": 124, "opt_str": null, "opt_mapping": {"id": "135121-231566677", "data": {"f1": 1, "f2": 2}}}'''
+decoded = my_cls.from_json(wanted_json)
+print(decoded)
+# MyClass(opt_int=OptionContainer(124), opt_str=OptionContainer<empty>, opt_mapping=OptionContainer(CustomMapping(id='135121-231566677', data={'f1': 1, 'f2': 2})))
+
+assert actual_json == wanted_json, "Encoding failed"
+assert decoded == my_cls, "Decoding failed"
+```
 
 ## Marshmallow interop
 
