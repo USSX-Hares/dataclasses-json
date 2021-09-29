@@ -1,7 +1,6 @@
 import abc
 import json
 from enum import Enum
-from types import GenericAlias
 from typing import (Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar,
                     Union, overload)
 
@@ -200,8 +199,6 @@ class DecodableGenericABC(abc.ABC):
             raise TypeError(f"{'Too many' if len(types) > cls._num_args else 'Not enough'} types for decoding {cls.__name__}: Expected {cls._num_args}, got {len(types)}.")
 
         return cls.__decode__(data, *types, **kwargs)
-
-    __class_getitem__ = classmethod(GenericAlias)
 
 class OptionalABC(abc.ABC):
     def __init_subclass__(cls, **kwargs):
