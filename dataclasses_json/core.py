@@ -404,3 +404,7 @@ def _asdict(obj, encode_json=False):
         return list(_asdict(v, encode_json=encode_json) for v in obj)
     else:
         return copy.deepcopy(obj)
+
+def _register_generic_cls(cls, encoder, decoder):
+    cfg.global_config.generic_encoders[cls] = encoder
+    cfg.global_config.generic_decoders[cls] = decoder
